@@ -3,16 +3,27 @@ import SwiftTerm
 import AppKit
 import FocusedCore
 
+final class FocusedTerminalView: LocalProcessTerminalView {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
 @MainActor
 final class AttachController: NSObject, LocalProcessTerminalViewDelegate {
     private(set) var terminalView: LocalProcessTerminalView?
     private(set) var currentSession: String?
+    private(set) var appearance: TerminalAppearance = .basic
 
     func makeTerminalView() -> LocalProcessTerminalView {
-        let view = LocalProcessTerminalView(frame: .zero)
+        let view = FocusedTerminalView(frame: .zero)
         view.processDelegate = self
+        view.apply(appearance: appearance)
         self.terminalView = view
         return view
+    }
+
+    func apply(appearance: TerminalAppearance) {
+        self.appearance = appearance
+        terminalView?.apply(appearance: appearance)
     }
 
     func attach(to sessionId: String) {

@@ -86,6 +86,26 @@ public actor TmuxControlClient {
         return result?.exitCode == 0
     }
 
+    public func currentCommand(session: String) async -> String? {
+        let result = try? await runRaw(
+            args: ["-L", socket.value, "display-message", "-p", "-t", session, "#{pane_current_command}"],
+            throwOnError: false
+        )
+        guard let result, result.exitCode == 0 else { return nil }
+        let trimmed = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    public func paneTitle(session: String) async -> String? {
+        let result = try? await runRaw(
+            args: ["-L", socket.value, "display-message", "-p", "-t", session, "#{pane_title}"],
+            throwOnError: false
+        )
+        guard let result, result.exitCode == 0 else { return nil }
+        let trimmed = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     // MARK: - Session mutation
 
     public func newSession(name: String, directory: String) async throws {

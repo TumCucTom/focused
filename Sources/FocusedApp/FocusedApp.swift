@@ -1,13 +1,15 @@
 import SwiftUI
+import AppKit
 import FocusedCore
 
 @main
 struct FocusedApp: App {
     @State private var appState = AppState()
+    @State private var sidebarWidth: CGFloat = SidebarWidth.load()
 
     var body: some Scene {
         WindowGroup("Focused") {
-            ContentView()
+            ContentView(sidebarWidth: $sidebarWidth)
                 .environment(appState)
                 .frame(minWidth: 800, minHeight: 500)
         }
@@ -25,22 +27,55 @@ struct FocusedApp: App {
     }
 }
 
+enum SidebarWidth {
+    private static let key = "FocusedSidebarWidth.v1"
+    private static let `default`: CGFloat = 260
+    private static let min: CGFloat = 180
+    private static let max: CGFloat = 800
+
+    static func load() -> CGFloat {
+        let raw = UserDefaults.standard.double(forKey: key)
+        guard raw > 0 else { return `default` }
+        return min ... max ~= CGFloat(raw) ? CGFloat(raw) : `default`
+    }
+
+    static func save(_ value: CGFloat) {
+        UserDefaults.standard.set(Double(value), forKey: key)
+    }
+
+    static func clamp(_ value: CGFloat) -> CGFloat {
+        Swift.min(Swift.max(value, min), max)
+    }
+}
+
 struct ContentView: View {
     @Environment(AppState.self) private var appState
+    @Binding var sidebarWidth: CGFloat
 
     var body: some View {
         @Bindable var bindable = appState
-        HSplitView {
+        HStack(spacing: 0) {
             SidebarView()
-                .frame(minWidth: 200, idealWidth: 240, maxWidth: 400)
+                .frame(width: sidebarWidth)
+            SidebarDivider(width: $sidebarWidth)
             mainArea
         }
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
                 Button(action: { appState.requestSpawn() }) {
                     Image(systemName: "plus")
                 }
-                .help("New agent (⌘T)")
+                .help("New shell in current directory (⌘T)")
+
+                Menu {
+                    Button("Spawn Claude Agent…") { appState.requestSpawnAgent() }
+                    Divider()
+                    Button("Pick Directory…") { appState.requestSpawnInDirectory() }
+                    Button("Custom Command…") { appState.requestSpawnWithCommand() }
+                } label: {
+                    Image(systemName: "chevron.down")
+                }
+                .help("More spawn options")
             }
             ToolbarItem(placement: .primaryAction) {
                 Button(action: { appState.showSettings = true }) {
@@ -60,6 +95,10 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: appState.banner)
+        .onAppear { appState.applyAppearance() }
+        .onChange(of: appState.settings.settings.theme) { _, _ in
+            appState.applyAppearance()
+        }
     }
 
     @ViewBuilder
@@ -79,5 +118,46 @@ struct ContentView: View {
         } else {
             PlaceholderTerminalView(sessionName: nil)
         }
+    }
+}
+
+struct SidebarDivider: View {
+    @Binding var width: CGFloat
+    @State private var hovering = false
+    @State private var dragStartWidth: CGFloat?
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor))
+                .frame(width: 1)
+            Rectangle()
+                .fill(Color.accentColor.opacity(hovering ? 0.6 : 0))
+                .frame(width: 3)
+        }
+        .frame(width: 8)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .onChange(of: hovering) { _, isHovering in
+            if isHovering {
+                NSCursor.resizeLeftRight.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    if dragStartWidth == nil {
+                        dragStartWidth = width
+                    }
+                    let proposed = (dragStartWidth ?? width) + value.translation.width
+                    width = SidebarWidth.clamp(proposed)
+                }
+                .onEnded { _ in
+                    dragStartWidth = nil
+                    SidebarWidth.save(width)
+                }
+        )
     }
 }

@@ -47,9 +47,20 @@ public final class SidebarStore {
         sessions[idx].status = .exited
     }
 
+    public func setStatus(id: String, status: SessionStatus) {
+        guard let idx = sessions.firstIndex(where: { $0.id == id }) else { return }
+        sessions[idx].status = status
+    }
+
     public func setPreview(id: String, text: String) {
         guard let idx = sessions.firstIndex(where: { $0.id == id }) else { return }
         sessions[idx].previewText = text
+    }
+
+    public func setName(id: String, name: String) {
+        guard let idx = sessions.firstIndex(where: { $0.id == id }) else { return }
+        guard sessions[idx].name != name else { return }
+        sessions[idx].name = name
     }
 
     public func togglePin(id: String) {

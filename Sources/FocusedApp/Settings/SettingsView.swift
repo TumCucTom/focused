@@ -20,6 +20,7 @@ struct SettingsView: View {
                         .frame(width: 50, alignment: .trailing)
                         .foregroundStyle(.secondary)
                 }
+                Toggle("Auto-switch to idle agents", isOn: binding(\.autoFollowIdle))
                 TextField("Default agent command", text: binding(\.defaultAgentCommand))
                 Picker("Theme", selection: binding(\.theme)) {
                     ForEach(AppTheme.allCases, id: \.self) { t in

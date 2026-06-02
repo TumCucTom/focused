@@ -8,6 +8,7 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
     public var lastActivity: Date
     public var previewText: String
     public var isPinned: Bool
+    public let spawnedAt: Date
 
     public init(
         id: String,
@@ -16,7 +17,8 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
         status: SessionStatus = .starting,
         lastActivity: Date = .distantPast,
         previewText: String = "",
-        isPinned: Bool = false
+        isPinned: Bool = false,
+        spawnedAt: Date = Date()
     ) {
         self.id = id
         self.name = name
@@ -25,10 +27,27 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
         self.lastActivity = lastActivity
         self.previewText = previewText
         self.isPinned = isPinned
+        self.spawnedAt = spawnedAt
     }
 
     public var shortDirectory: String {
         let last = workingDirectory.split(separator: "/").last.map(String.init) ?? workingDirectory
         return last.isEmpty ? "/" : last
+    }
+
+    public func displayName(title: String?, command: String?) -> String {
+        let folder = shortDirectory
+        // Prefer the pane title (set by the running app via OSC 0/2 — for
+        // Claude Code this is the current task). Fall back to the command
+        // name (e.g. "zsh") for bare shells with no meaningful title.
+        let label = trimmed(title) ?? trimmed(command)
+        guard let label else { return folder }
+        return "\(folder) — \(label)"
+    }
+
+    private func trimmed(_ s: String?) -> String? {
+        guard let s else { return nil }
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : t
     }
 }

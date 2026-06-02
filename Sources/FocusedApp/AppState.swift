@@ -16,6 +16,24 @@ final class AppState {
     private let tmux: TmuxControlClient
     private var detector: DoneDetector
     private var pollTask: Task<Void, Never>?
+    private var lastPaneTail: [String: String] = [:]
+    private let spawnGracePeriod: TimeInterval = 2.0
+
+    func currentAppearance() -> TerminalAppearance {
+        switch settings.settings.theme {
+        case .light: return .basic
+        case .dark: return .pro
+        case .auto:
+            if NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua {
+                return .pro
+            }
+            return .basic
+        }
+    }
+
+    func applyAppearance() {
+        attachController.apply(appearance: currentAppearance())
+    }
 
     struct Banner: Equatable, Identifiable {
         let id = UUID()
@@ -54,6 +72,7 @@ final class AppState {
             guard let self else { return }
             while !Task.isCancelled {
                 await self.refreshSessions()
+                await self.refreshNames()
                 await self.evaluateStatus()
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
@@ -62,24 +81,65 @@ final class AppState {
 
     func requestSpawn() {
         guard !tmuxMissing else { return }
+        let directory = defaultSpawnDirectory()
+        Task { await spawn(directory: directory, command: nil) }
+    }
+
+    func requestSpawnInDirectory() {
+        guard !tmuxMissing else { return }
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.title = "Choose a working directory for the new agent"
+        panel.title = "Choose a working directory for the new shell"
         panel.prompt = "Spawn"
         if panel.runModal() == .OK, let url = panel.url {
-            Task { await spawn(directory: url.path) }
+            Task { await spawn(directory: url.path, command: nil) }
         }
     }
 
-    func spawn(directory: String) async {
+    func requestSpawnWithCommand() {
+        guard !tmuxMissing else { return }
+        let alert = NSAlert()
+        alert.messageText = "Run a custom command"
+        alert.informativeText = "This command will be sent to the new tmux session after it starts."
+        alert.addButton(withTitle: "Spawn")
+        alert.addButton(withTitle: "Cancel")
+        let input = NSTextField(string: settings.settings.defaultAgentCommand)
+        input.frame = NSRect(x: 0, y: 0, width: 360, height: 24)
+        alert.accessoryView = input
+        if alert.runModal() == .alertFirstButtonReturn {
+            let cmd = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cmd.isEmpty else { return }
+            let directory = defaultSpawnDirectory()
+            Task { await spawn(directory: directory, command: cmd) }
+        }
+    }
+
+    func requestSpawnAgent() {
+        guard !tmuxMissing else { return }
+        let directory = defaultSpawnDirectory()
+        let cmd = settings.settings.defaultAgentCommand
+        Task { await spawn(directory: directory, command: cmd) }
+    }
+
+    private func defaultSpawnDirectory() -> String {
+        if let id = selectedSessionId,
+           let session = sessions.sessions.first(where: { $0.id == id }),
+           session.workingDirectory != "(external)" {
+            return session.workingDirectory
+        }
+        return NSHomeDirectory()
+    }
+
+    func spawn(directory: String, command: String? = nil) async {
         let id = Self.makeId()
         let name = "agent-\(id)"
         do {
             try await tmux.newSession(name: name, directory: directory)
-            let cmd = settings.settings.defaultAgentCommand
-            try await tmux.sendKeys(cmd, to: name)
+            if let command, !command.isEmpty {
+                try await tmux.sendKeys(command, to: name)
+            }
             let session = AgentSession(
                 id: name,
                 name: directory.split(separator: "/").last.map(String.init) ?? name,
@@ -105,20 +165,17 @@ final class AppState {
             let infos = try await tmux.listSessions()
             let agentInfos = infos.filter { $0.name.hasPrefix("agent-") }
             let known = Set(sessions.sessions.map(\.id))
-            for info in agentInfos {
-                if known.contains(info.name) {
-                    sessions.touch(id: info.name)
-                } else {
-                    sessions.upsert(AgentSession(
-                        id: info.name,
-                        name: info.name,
-                        workingDirectory: "(external)",
-                        status: .working
-                    ))
-                }
+            for info in agentInfos where !known.contains(info.name) {
+                sessions.upsert(AgentSession(
+                    id: info.name,
+                    name: info.name,
+                    workingDirectory: "(external)",
+                    status: .working
+                ))
             }
             let currentNames = Set(agentInfos.map(\.name))
             for id in sessions.sessions.map(\.id) where !currentNames.contains(id) {
+                lastPaneTail.removeValue(forKey: id)
                 sessions.remove(id: id)
                 if selectedSessionId == id { selectedSessionId = nil }
             }
@@ -127,30 +184,113 @@ final class AppState {
         }
     }
 
+    private func refreshNames() async {
+        for session in sessions.sessions {
+            let title = await tmux.paneTitle(session: session.id)
+            let command = await tmux.currentCommand(session: session.id)
+            let newName = session.displayName(title: title, command: command)
+            if newName != session.name {
+                sessions.setName(id: session.id, name: newName)
+            }
+        }
+    }
+
     private func evaluateStatus() async {
         for session in sessions.sessions {
             do {
                 let text = try await tmux.capturePane(session: session.id, lines: 50)
+                let tail = semanticTail(text)
+                if let prior = lastPaneTail[session.id] {
+                    if prior != tail {
+                        sessions.touch(id: session.id)
+                    }
+                }
+                lastPaneTail[session.id] = tail
+
                 let preview = previewLines(from: text)
                 sessions.setPreview(id: session.id, text: preview)
                 let quietFor = Date().timeIntervalSince(session.lastActivity)
                 let status = detector.evaluate(paneText: text, quietFor: quietFor)
                 if status == session.status { continue }
-                let wasActive = session.status == .working || session.status == .starting
-                if status == .idle, wasActive {
-                    sessions.markIdle(id: session.id)
-                    NotificationManager.shared.fireIdle(
-                        sessionName: session.name,
-                        sessionId: session.id,
-                        body: preview
-                    )
-                } else if status == .exited {
-                    sessions.markExited(id: session.id)
-                }
+
+                let prev = session.status
+                handleStatusTransition(
+                    id: session.id,
+                    from: prev,
+                    to: status,
+                    preview: preview
+                )
             } catch {
                 continue
             }
         }
+        applyAutoFollow()
+    }
+
+    private func handleStatusTransition(
+        id: String,
+        from prev: SessionStatus,
+        to current: SessionStatus,
+        preview: String
+    ) {
+        let autoFollow = settings.settings.autoFollowIdle
+        if current == .idle, prev == .working || prev == .starting {
+            sessions.markIdle(id: id)
+            if settings.settings.notificationsEnabled {
+                let name = sessions.sessions.first(where: { $0.id == id })?.name ?? id
+                NotificationManager.shared.fireIdle(
+                    sessionName: name,
+                    sessionId: id,
+                    body: preview
+                )
+            }
+            if autoFollow, !isFreshlySpawned(id: id) {
+                selectedSessionId = id
+            }
+        } else if prev == .idle, current != .idle {
+            if current == .exited {
+                sessions.markExited(id: id)
+            } else {
+                sessions.setStatus(id: id, status: current)
+            }
+            if autoFollow, selectedSessionId == id {
+                if let next = nextIdleSession(excluding: id) {
+                    selectedSessionId = next
+                }
+            }
+        } else if current == .exited {
+            sessions.markExited(id: id)
+        } else {
+            sessions.setStatus(id: id, status: current)
+        }
+    }
+
+    private func applyAutoFollow() {
+        guard settings.settings.autoFollowIdle else { return }
+        if let id = selectedSessionId,
+           let current = sessions.sessions.first(where: { $0.id == id }) {
+            if isFreshlySpawned(id: id) { return }
+            if current.status == .idle { return }
+        }
+        if let top = sessions.sessions.first(where: { $0.status == .idle }) {
+            if selectedSessionId != top.id {
+                selectedSessionId = top.id
+            }
+        }
+    }
+
+    private func isFreshlySpawned(id: String) -> Bool {
+        guard let s = sessions.sessions.first(where: { $0.id == id }) else { return false }
+        return Date().timeIntervalSince(s.spawnedAt) < spawnGracePeriod
+    }
+
+    private func nextIdleSession(excluding id: String) -> String? {
+        sessions.sessions.first(where: { $0.status == .idle && $0.id != id })?.id
+    }
+
+    private func semanticTail(_ text: String, lines: Int = 3) -> String {
+        let nonEmpty = text.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
+        return nonEmpty.suffix(lines).joined(separator: "\n")
     }
 
     private func previewLines(from text: String) -> String {
