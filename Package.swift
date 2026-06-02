@@ -25,7 +25,10 @@ let package = Package(
         ),
         .testTarget(
             name: "FocusedCoreTests",
-            dependencies: ["FocusedCore"]
+            dependencies: ["FocusedCore"],
+            resources: [
+                .copy("Fixtures"),
+            ]
         ),
     ]
 )
