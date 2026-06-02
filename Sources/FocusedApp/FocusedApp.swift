@@ -72,7 +72,10 @@ struct ContentView: View {
             )
         } else if let id = appState.selectedSessionId,
                   appState.sessions.sessions.contains(where: { $0.id == id }) {
-            PlaceholderTerminalView(sessionName: appState.sessions.sessions.first(where: { $0.id == id })?.name)
+            TerminalHostView(
+                attachController: appState.attachController,
+                sessionId: id
+            )
         } else {
             PlaceholderTerminalView(sessionName: nil)
         }

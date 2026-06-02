@@ -11,6 +11,7 @@ final class AppState {
     var showSettings: Bool = false
     var banner: Banner?
     var tmuxMissing: Bool = false
+    var attachController = AttachController()
 
     private let tmux: TmuxControlClient
     private var detector: DoneDetector
