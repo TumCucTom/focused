@@ -70,6 +70,16 @@ struct ContentView: View {
                 Menu {
                     Button("Spawn Claude Agent…") { appState.requestSpawnAgent() }
                     Divider()
+                    if !appState.settings.settings.recentDirectories.isEmpty {
+                        Menu("Recent Directories") {
+                            ForEach(appState.settings.settings.recentDirectories, id: \.self) { dir in
+                                Button(dir.split(separator: "/").last.map(String.init) ?? dir) {
+                                    appState.requestSpawnInRecentDirectory(dir)
+                                }
+                            }
+                        }
+                        Divider()
+                    }
                     Button("Pick Directory…") { appState.requestSpawnInDirectory() }
                     Button("Custom Command…") { appState.requestSpawnWithCommand() }
                 } label: {
@@ -86,6 +96,11 @@ struct ContentView: View {
         }
         .sheet(isPresented: $bindable.showSettings) {
             SettingsView()
+        }
+        .sheet(isPresented: $bindable.showSpawnPicker) {
+            SpawnPickerView { dir in
+                Task { await appState.spawn(directory: dir, command: nil) }
+            }
         }
         .overlay(alignment: .top) {
             if let banner = appState.banner {

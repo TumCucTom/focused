@@ -11,6 +11,7 @@ final class AppState {
     var showSettings: Bool = false
     var banner: Banner?
     var tmuxMissing: Bool = false
+    var showSpawnPicker: Bool = false
     var attachController = AttachController()
 
     private let tmux: TmuxControlClient
@@ -90,15 +91,7 @@ final class AppState {
 
     func requestSpawnInDirectory() {
         guard !tmuxMissing else { return }
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.title = "Choose a working directory for the new shell"
-        panel.prompt = "Spawn"
-        if panel.runModal() == .OK, let url = panel.url {
-            Task { await spawn(directory: url.path, command: nil) }
-        }
+        showSpawnPicker = true
     }
 
     func requestSpawnWithCommand() {
@@ -152,9 +145,24 @@ final class AppState {
             )
             sessions.upsert(session)
             selectedSessionId = name
+            recordRecentDirectory(directory)
         } catch {
             banner = Banner(kind: .error, message: "Failed to spawn: \(error)")
         }
+    }
+
+    private func recordRecentDirectory(_ directory: String) {
+        settings.update { s in
+            var recents = s.recentDirectories.filter { $0 != directory }
+            recents.insert(directory, at: 0)
+            if recents.count > 8 { recents = Array(recents.prefix(8)) }
+            s.recentDirectories = recents
+        }
+    }
+
+    func requestSpawnInRecentDirectory(_ directory: String) {
+        guard !tmuxMissing else { return }
+        Task { await spawn(directory: directory, command: nil) }
     }
 
     func kill(id: String) async {

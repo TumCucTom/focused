@@ -10,17 +10,19 @@ public struct Settings: Sendable, Codable, Equatable {
     public var defaultAgentCommand: String
     public var theme: AppTheme
     public var autoFollowIdle: Bool
+    public var recentDirectories: [String]
 
     public static let `default` = Settings(
         notificationsEnabled: true,
         idleThresholdSeconds: 1.5,
         defaultAgentCommand: "claude",
         theme: .auto,
-        autoFollowIdle: true
+        autoFollowIdle: true,
+        recentDirectories: []
     )
 
     private enum CodingKeys: String, CodingKey {
-        case notificationsEnabled, idleThresholdSeconds, defaultAgentCommand, theme, autoFollowIdle
+        case notificationsEnabled, idleThresholdSeconds, defaultAgentCommand, theme, autoFollowIdle, recentDirectories
     }
 
     public init(from decoder: Decoder) throws {
@@ -30,6 +32,7 @@ public struct Settings: Sendable, Codable, Equatable {
         self.defaultAgentCommand = try c.decode(String.self, forKey: .defaultAgentCommand)
         self.theme = try c.decode(AppTheme.self, forKey: .theme)
         self.autoFollowIdle = try c.decodeIfPresent(Bool.self, forKey: .autoFollowIdle) ?? true
+        self.recentDirectories = try c.decodeIfPresent([String].self, forKey: .recentDirectories) ?? []
     }
 
     public init(
@@ -37,13 +40,15 @@ public struct Settings: Sendable, Codable, Equatable {
         idleThresholdSeconds: Double,
         defaultAgentCommand: String,
         theme: AppTheme,
-        autoFollowIdle: Bool
+        autoFollowIdle: Bool,
+        recentDirectories: [String]
     ) {
         self.notificationsEnabled = notificationsEnabled
         self.idleThresholdSeconds = idleThresholdSeconds
         self.defaultAgentCommand = defaultAgentCommand
         self.theme = theme
         self.autoFollowIdle = autoFollowIdle
+        self.recentDirectories = recentDirectories
     }
 }
 
