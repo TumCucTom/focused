@@ -36,6 +36,8 @@ public final class SidebarStore {
         guard let idx = sessions.firstIndex(where: { $0.id == id }) else { return }
         let wasFlashing = (flashingId == id)
         sessions[idx].status = .idle
+        sessions[idx].idleSince = Date()
+        sessions[idx].workingSince = nil
         if sessions[idx].isPinned { return }
         if wasFlashing { return }
         let session = sessions.remove(at: idx)
@@ -45,11 +47,34 @@ public final class SidebarStore {
     public func markExited(id: String) {
         guard let idx = sessions.firstIndex(where: { $0.id == id }) else { return }
         sessions[idx].status = .exited
+        sessions[idx].idleSince = nil
+        sessions[idx].workingSince = nil
     }
 
     public func setStatus(id: String, status: SessionStatus) {
         guard let idx = sessions.firstIndex(where: { $0.id == id }) else { return }
+        let now = Date()
+        switch status {
+        case .idle:
+            sessions[idx].idleSince = now
+            sessions[idx].workingSince = nil
+        case .working, .starting:
+            if sessions[idx].status != .working && sessions[idx].status != .starting {
+                sessions[idx].workingSince = now
+            }
+            sessions[idx].idleSince = nil
+        case .exited:
+            sessions[idx].idleSince = nil
+            sessions[idx].workingSince = nil
+        }
         sessions[idx].status = status
+    }
+
+    public func setGitBranch(id: String, branch: String?) {
+        guard let idx = sessions.firstIndex(where: { $0.id == id }) else { return }
+        if sessions[idx].gitBranch != branch {
+            sessions[idx].gitBranch = branch
+        }
     }
 
     public func setPreview(id: String, text: String) {

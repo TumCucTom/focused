@@ -9,6 +9,9 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
     public var previewText: String
     public var isPinned: Bool
     public let spawnedAt: Date
+    public var idleSince: Date?
+    public var workingSince: Date?
+    public var gitBranch: String?
 
     public init(
         id: String,
@@ -18,7 +21,10 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
         lastActivity: Date = .distantPast,
         previewText: String = "",
         isPinned: Bool = false,
-        spawnedAt: Date = Date()
+        spawnedAt: Date = Date(),
+        idleSince: Date? = nil,
+        workingSince: Date? = nil,
+        gitBranch: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -28,6 +34,9 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
         self.previewText = previewText
         self.isPinned = isPinned
         self.spawnedAt = spawnedAt
+        self.idleSince = idleSince
+        self.workingSince = workingSince
+        self.gitBranch = gitBranch
     }
 
     public var shortDirectory: String {
@@ -37,12 +46,29 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
 
     public func displayName(title: String?, command: String?) -> String {
         let folder = shortDirectory
-        // Prefer the pane title (set by the running app via OSC 0/2 — for
-        // Claude Code this is the current task). Fall back to the command
-        // name (e.g. "zsh") for bare shells with no meaningful title.
         let label = trimmed(title) ?? trimmed(command)
         guard let label else { return folder }
         return "\(folder) — \(label)"
+    }
+
+    /// Human-readable duration since the session entered its current status.
+    public func statusDuration(now: Date = Date()) -> String? {
+        switch status {
+        case .idle: return idleSince.map { Self.shortFormat(now.timeIntervalSince($0)) }
+        case .working, .starting: return workingSince.map { Self.shortFormat(now.timeIntervalSince($0)) }
+        case .exited: return nil
+        }
+    }
+
+    public static func shortFormat(_ seconds: TimeInterval) -> String {
+        let s = Int(seconds)
+        if s < 60 { return "\(s)s" }
+        let m = s / 60
+        if m < 60 { return "\(m)m" }
+        let h = m / 60
+        let rem = m % 60
+        if rem == 0 { return "\(h)h" }
+        return "\(h)h\(rem)m"
     }
 
     private func trimmed(_ s: String?) -> String? {

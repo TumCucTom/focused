@@ -17,6 +17,8 @@ final class AppState {
     private var detector: DoneDetector
     private var pollTask: Task<Void, Never>?
     private var lastPaneTail: [String: String] = [:]
+    private var lastGitFetch: [String: Date] = [:]
+    private let gitFetchInterval: TimeInterval = 10.0
     private let spawnGracePeriod: TimeInterval = 2.0
 
     func currentAppearance() -> TerminalAppearance {
@@ -73,6 +75,7 @@ final class AppState {
             while !Task.isCancelled {
                 await self.refreshSessions()
                 await self.refreshNames()
+                await self.refreshGitBranches()
                 await self.evaluateStatus()
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
@@ -160,6 +163,19 @@ final class AppState {
         if selectedSessionId == id { selectedSessionId = nil }
     }
 
+    /// Re-send the default agent command to the session. Works for sessions
+    /// whose shell is still alive (i.e. Claude exited back to a prompt).
+    /// For sessions where the shell itself died, the user should kill + respawn.
+    func restart(id: String) async {
+        let command = settings.settings.defaultAgentCommand
+        do {
+            try await tmux.sendKeys(command, to: id)
+            sessions.setStatus(id: id, status: .working)
+        } catch {
+            banner = Banner(kind: .error, message: "Restart failed: \(error)")
+        }
+    }
+
     private func refreshSessions() async {
         do {
             let infos = try await tmux.listSessions()
@@ -192,6 +208,17 @@ final class AppState {
             if newName != session.name {
                 sessions.setName(id: session.id, name: newName)
             }
+        }
+    }
+
+    private func refreshGitBranches() async {
+        let now = Date()
+        for session in sessions.sessions {
+            let last = lastGitFetch[session.id] ?? .distantPast
+            if now.timeIntervalSince(last) < gitFetchInterval { continue }
+            lastGitFetch[session.id] = now
+            let branch = GitBranch.currentBranch(in: session.workingDirectory)
+            sessions.setGitBranch(id: session.id, branch: branch)
         }
     }
 

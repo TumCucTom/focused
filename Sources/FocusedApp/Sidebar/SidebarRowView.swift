@@ -3,6 +3,9 @@ import FocusedCore
 
 struct SidebarRowView: View {
     let session: AgentSession
+    @State private var now: Date = Date()
+
+    private let tickTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -20,11 +23,28 @@ struct SidebarRowView: View {
                         .foregroundStyle(Color(red: 0.13, green: 0.12, blue: 0.11))
                         .lineLimit(1)
                     Spacer(minLength: 0)
+                    if let dur = session.statusDuration(now: now) {
+                        Text(dur)
+                            .font(.system(size: 11, weight: .regular).monospacedDigit())
+                            .foregroundStyle(Color(white: 0.50))
+                    }
                 }
-                Text(session.shortDirectory)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color(white: 0.45))
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(session.shortDirectory)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color(white: 0.45))
+                    if let branch = session.gitBranch {
+                        Text("·")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color(white: 0.55))
+                        Text(branch)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color(red: 0.55, green: 0.36, blue: 0.96))
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .lineLimit(1)
                 if !session.previewText.isEmpty {
                     Text(session.previewText)
                         .font(.system(size: 11))
@@ -39,6 +59,7 @@ struct SidebarRowView: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(Color.clear)
         )
+        .onReceive(tickTimer) { now = $0 }
     }
 
     @ViewBuilder
