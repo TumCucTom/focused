@@ -184,6 +184,13 @@ final class AppState {
         }
     }
 
+    /// Send literal text to a session's pane and press Enter.
+    /// Used by the inline prompt bar; for `Restart` we just re-send the command.
+    func sendToSession(id: String, text: String) async throws {
+        try await tmux.sendKeys(text, to: id)
+        sessions.touch(id: id)
+    }
+
     private func refreshSessions() async {
         do {
             let infos = try await tmux.listSessions()

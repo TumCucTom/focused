@@ -88,6 +88,19 @@ struct ContentView: View {
                 .help("More spawn options")
             }
             ToolbarItem(placement: .primaryAction) {
+                Button(action: {
+                    appState.settings.update { $0.broadcastMode.toggle() }
+                }) {
+                    Image(systemName: appState.settings.settings.broadcastMode
+                          ? "antenna.radiowaves.left.and.right"
+                          : "antenna.radiowaves.left.and.right.slash")
+                        .foregroundStyle(appState.settings.settings.broadcastMode
+                                         ? Color(red: 1.0, green: 0.48, blue: 0.10)
+                                         : .secondary)
+                }
+                .help("Broadcast mode (send to all working agents)")
+            }
+            ToolbarItem(placement: .primaryAction) {
                 Button(action: { appState.showSettings = true }) {
                     Image(systemName: "gearshape")
                 }
@@ -124,14 +137,21 @@ struct ContentView: View {
                 message: "Focused uses tmux under the hood. Install it with Homebrew:",
                 command: "brew install tmux"
             )
-        } else if let id = appState.selectedSessionId,
-                  appState.sessions.sessions.contains(where: { $0.id == id }) {
-            TerminalHostView(
-                attachController: appState.attachController,
-                sessionId: id
-            )
         } else {
-            PlaceholderTerminalView(sessionName: nil)
+            VStack(spacing: 0) {
+                if let id = appState.selectedSessionId,
+                   appState.sessions.sessions.contains(where: { $0.id == id }) {
+                    TerminalHostView(
+                        attachController: appState.attachController,
+                        sessionId: id
+                    )
+                } else {
+                    PlaceholderTerminalView(sessionName: nil)
+                }
+                if appState.settings.settings.showPromptBar {
+                    PromptBar()
+                }
+            }
         }
     }
 }

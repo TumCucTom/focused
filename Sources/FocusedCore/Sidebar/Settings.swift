@@ -11,6 +11,8 @@ public struct Settings: Sendable, Codable, Equatable {
     public var theme: AppTheme
     public var autoFollowIdle: Bool
     public var recentDirectories: [String]
+    public var broadcastMode: Bool
+    public var showPromptBar: Bool
 
     public static let `default` = Settings(
         notificationsEnabled: true,
@@ -18,11 +20,13 @@ public struct Settings: Sendable, Codable, Equatable {
         defaultAgentCommand: "claude",
         theme: .auto,
         autoFollowIdle: true,
-        recentDirectories: []
+        recentDirectories: [],
+        broadcastMode: false,
+        showPromptBar: true
     )
 
     private enum CodingKeys: String, CodingKey {
-        case notificationsEnabled, idleThresholdSeconds, defaultAgentCommand, theme, autoFollowIdle, recentDirectories
+        case notificationsEnabled, idleThresholdSeconds, defaultAgentCommand, theme, autoFollowIdle, recentDirectories, broadcastMode, showPromptBar
     }
 
     public init(from decoder: Decoder) throws {
@@ -33,6 +37,8 @@ public struct Settings: Sendable, Codable, Equatable {
         self.theme = try c.decode(AppTheme.self, forKey: .theme)
         self.autoFollowIdle = try c.decodeIfPresent(Bool.self, forKey: .autoFollowIdle) ?? true
         self.recentDirectories = try c.decodeIfPresent([String].self, forKey: .recentDirectories) ?? []
+        self.broadcastMode = try c.decodeIfPresent(Bool.self, forKey: .broadcastMode) ?? false
+        self.showPromptBar = try c.decodeIfPresent(Bool.self, forKey: .showPromptBar) ?? true
     }
 
     public init(
@@ -41,7 +47,9 @@ public struct Settings: Sendable, Codable, Equatable {
         defaultAgentCommand: String,
         theme: AppTheme,
         autoFollowIdle: Bool,
-        recentDirectories: [String]
+        recentDirectories: [String],
+        broadcastMode: Bool,
+        showPromptBar: Bool
     ) {
         self.notificationsEnabled = notificationsEnabled
         self.idleThresholdSeconds = idleThresholdSeconds
@@ -49,6 +57,8 @@ public struct Settings: Sendable, Codable, Equatable {
         self.theme = theme
         self.autoFollowIdle = autoFollowIdle
         self.recentDirectories = recentDirectories
+        self.broadcastMode = broadcastMode
+        self.showPromptBar = showPromptBar
     }
 }
 
