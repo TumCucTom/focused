@@ -12,6 +12,7 @@ final class AppState {
     var banner: Banner?
     var tmuxMissing: Bool = false
     var showSpawnPicker: Bool = false
+    var showCommandPalette: Bool = false
     var attachController = AttachController()
 
     private let tmux: TmuxControlClient

@@ -28,6 +28,9 @@ struct SidebarView: View {
             }
         }
         .background(Color(red: 0.98, green: 0.97, blue: 0.96))
+        .onReceive(NotificationCenter.default.publisher(for: .focusSidebarSearch)) { _ in
+            searchFocused = true
+        }
     }
 
     private var header: some View {

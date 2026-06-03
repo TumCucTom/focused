@@ -19,6 +19,10 @@ struct FocusedApp: App {
                 Button("New Agent…") { appState.requestSpawn() }
                     .keyboardShortcut("t", modifiers: .command)
             }
+            CommandGroup(after: .newItem) {
+                Button("Command Palette…") { appState.showCommandPalette = true }
+                    .keyboardShortcut("k", modifiers: .command)
+            }
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") { appState.showSettings = true }
                     .keyboardShortcut(",", modifiers: .command)
@@ -114,6 +118,9 @@ struct ContentView: View {
             SpawnPickerView { dir in
                 Task { await appState.spawn(directory: dir, command: nil) }
             }
+        }
+        .sheet(isPresented: $bindable.showCommandPalette) {
+            CommandPaletteView()
         }
         .overlay(alignment: .top) {
             if let banner = appState.banner {
